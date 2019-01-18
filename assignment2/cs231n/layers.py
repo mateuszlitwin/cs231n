@@ -20,15 +20,8 @@ def affine_forward(x, w, b):
     - out: output, of shape (N, M)
     - cache: (x, w, b)
     """
-    out = None
-    ###########################################################################
-    # TODO: Implement the affine forward pass. Store the result in out. You   #
-    # will need to reshape the input into rows.                               #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+    dim = np.prod(x.shape[1:])
+    out = x.reshape(x.shape[0], dim).dot(w) + b.T
     cache = (x, w, b)
     return out, cache
 
@@ -50,14 +43,12 @@ def affine_backward(dout, cache):
     - db: Gradient with respect to b, of shape (M,)
     """
     x, w, b = cache
-    dx, dw, db = None, None, None
-    ###########################################################################
-    # TODO: Implement the affine backward pass.                               #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+
+    dx = dout.dot(w.T)  # N,D = N,M x M,D
+    dx = dx.reshape(x.shape)  # N,d_1,...,d_k
+
+    dw = x.reshape(x.shape[0], -1).T.dot(dout)
+    db = np.sum(dout.T, axis=1)
     return dx, dw, db
 
 
@@ -72,14 +63,7 @@ def relu_forward(x):
     - out: Output, of the same shape as x
     - cache: x
     """
-    out = None
-    ###########################################################################
-    # TODO: Implement the ReLU forward pass.                                  #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+    out = np.maximum(x, 0)
     cache = x
     return out, cache
 
@@ -95,14 +79,9 @@ def relu_backward(dout, cache):
     Returns:
     - dx: Gradient with respect to x
     """
-    dx, x = None, cache
-    ###########################################################################
-    # TODO: Implement the ReLU backward pass.                                 #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+    x = cache
+    dx = dout
+    dx[x <= 0] = 0
     return dx
 
 
@@ -624,7 +603,7 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     - cache: Values needed for the backward pass
     """
     out, cache = None, None
-    eps = gn_param.get('eps',1e-5)
+    eps = gn_param.get('eps', 1e-5)
     ###########################################################################
     # TODO: Implement the forward pass for spatial group normalization.       #
     # This will be extremely similar to the layer norm implementation.        #

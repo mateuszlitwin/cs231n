@@ -4,6 +4,7 @@ import numpy as np
 
 from cs231n.layers import *
 from cs231n.layer_utils import *
+from cs231n.layer_utils import affine_bn_relu_forward, affine_bn_relu_backward
 
 
 class TwoLayerNet(object):
@@ -160,6 +161,11 @@ class FullyConnectedNet(object):
             self.params[f"W{i}"] = wi
             self.params[f"b{i}"] = bi
 
+        if self.normalization == 'batchnorm':
+            for i in range(self.num_layers - 1):
+                self.params[f"gamma{i}"] = np.ones(dims[i + 1])
+                self.params[f"beta{i}"] = np.zeros(dims[i + 1])
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -222,12 +228,28 @@ class FullyConnectedNet(object):
             wi = self.params[f"W{i}"]
             bi = self.params[f"b{i}"]
             xi = xs[-1]
+
+            if self.use_dropout:
+                xi, dropout_cache = dropout_forward(xi, self.dropout_param)
+                xs.append(xi)
+                caches.append(dropout_cache)
+
             if i < self.num_layers - 1:
-                outi, cachei = affine_relu_forward(xi, wi, bi)
+                if self.normalization == 'batchnorm':
+                    gamma = self.params[f"gamma{i}"]
+                    beta = self.params[f"beta{i}"]
+                    bn_param = self.bn_params[i]
+                    outi, cachei = affine_bn_relu_forward(xi, wi, bi, gamma, beta, bn_param)
+                    xs.append(outi)
+                    caches.append(cachei)
+                else:
+                    outi, cachei = affine_relu_forward(xi, wi, bi)
+                    xs.append(outi)
+                    caches.append(cachei)
             else:
                 outi, cachei = affine_forward(xi, wi, bi)
-            xs.append(outi)
-            caches.append(cachei)
+                xs.append(outi)
+                caches.append(cachei)
         scores = xs[-1]
 
         ############################################################################
@@ -258,12 +280,31 @@ class FullyConnectedNet(object):
         for i in reversed(range(self.num_layers)):
             wi = self.params[f"W{i}"]
             loss += 0.5 * self.reg * np.sum(wi * wi)
-            cache = caches[i]
-            backward = affine_backward if i == self.num_layers - 1 else affine_relu_backward
-            dx, dw, db = backward(dout, cache)
-            dout = dx
-            grads[f"W{i}"] = dw + self.reg * wi
-            grads[f"b{i}"] = db
+
+            if i == self.num_layers - 1:
+                cache = caches.pop()
+                dx, dw, db = affine_backward(dout, cache)
+                dout = dx
+                grads[f"W{i}"] = dw + self.reg * wi
+                grads[f"b{i}"] = db
+            else:
+                cache = caches.pop()
+                if self.normalization == 'batchnorm':
+                    dx, dw, db, dgamma, dbeta = affine_bn_relu_backward(dout, cache)
+                    dout = dx
+                    grads[f"W{i}"] = dw + self.reg * wi
+                    grads[f"b{i}"] = db
+                    grads[f"gamma{i}"] = dgamma
+                    grads[f"beta{i}"] = dbeta
+                else:
+                    dx, dw, db = affine_relu_backward(dout, cache)
+                    dout = dx
+                    grads[f"W{i}"] = dw + self.reg * wi
+                    grads[f"b{i}"] = db
+
+            if self.use_dropout:
+                cache = caches.pop()
+                dout = dropout_backward(dout, cache)
 
         ############################################################################
         #                             END OF YOUR CODE                             #

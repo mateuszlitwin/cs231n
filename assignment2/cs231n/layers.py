@@ -269,6 +269,7 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # transformations you could perform, that would enable you to copy over   #
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
+
     pass
     ###########################################################################
     #                             END OF YOUR CODE                            #

@@ -1,7 +1,6 @@
 from __future__ import print_function, division
-from builtins import range
+from builtins import range, len, reversed
 import numpy as np
-
 
 """
 This file defines layer types that are commonly used for recurrent neural
@@ -34,7 +33,11 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # hidden state and any values you need for the backward pass in the next_h   #
     # and cache variables respectively.                                          #
     ##############################################################################
-    pass
+
+    a = prev_h.dot(Wh) + x.dot(Wx) + b
+    next_h = np.tanh(a)
+    cache = (a, Wx, Wh, x, prev_h, b)
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -63,7 +66,25 @@ def rnn_step_backward(dnext_h, cache):
     # HINT: For the tanh function, you can compute the local derivative in terms #
     # of the output value from tanh.                                             #
     ##############################################################################
-    pass
+
+    # tanh'(x) = 1 - tanh^2(x)
+    #
+    #  (1 - tanh^2(prev_h.dot(Wh) + x.dot(Wx) + b)).dot(Wx.T)  HxD
+
+    (a, Wx, Wh, x, prev_h, b) = cache
+
+    da_x = Wx.T
+    da_prev_h = Wh.T
+    da_Wx = x.T
+    da_Wh = prev_h.T
+
+    du_a = (1 - np.tanh(a) ** 2)
+    dx = np.dot(dnext_h * du_a, da_x)
+    dprev_h = np.dot(dnext_h * du_a, da_prev_h)
+    dWx = np.dot(da_Wx, dnext_h * du_a)
+    dWh = np.dot(da_Wh, dnext_h * du_a)
+    db = np.sum(dnext_h * du_a, axis=0)
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -78,7 +99,7 @@ def rnn_forward(x, h0, Wx, Wh, b):
     the RNN forward, we return the hidden states for all timesteps.
 
     Inputs:
-    - x: Input data for the entire timeseries, of shape (N, T, D).
+    - x: Input data for the entire timeseries, of shape (N, T, D).dnext_h
     - h0: Initial hidden state, of shape (N, H)
     - Wx: Weight matrix for input-to-hidden connections, of shape (D, H)
     - Wh: Weight matrix for hidden-to-hidden connections, of shape (H, H)
@@ -92,9 +113,18 @@ def rnn_forward(x, h0, Wx, Wh, b):
     ##############################################################################
     # TODO: Implement forward pass for a vanilla RNN running on a sequence of    #
     # input data. You should use the rnn_step_forward function that you defined  #
-    # above. You can use a for loop to help compute the forward pass.            #
+    # above. You can use a for loop to help compute the forward dnext_hpass.            #
     ##############################################################################
-    pass
+
+    prev_h = h0
+    h_by_step = []
+    cache = []
+    for t in range(x.shape[1]):
+        next_h, step_cache = rnn_step_forward(x[:, t, :], prev_h, Wx, Wh, b)
+        h_by_step.append(next_h)
+        cache.append(step_cache)
+        prev_h = next_h
+    h = np.asarray(h_by_step).transpose(1, 0, 2)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -126,7 +156,22 @@ def rnn_backward(dh, cache):
     # sequence of data. You should use the rnn_step_backward function that you   #
     # defined above. You can use a for loop to help compute the backward pass.   #
     ##############################################################################
-    pass
+
+    (N, T, H) = dh.shape
+
+    dx_by_t = []
+    dprev_h_t = np.zeros(shape=(N, H))
+
+    for t in reversed(range(T)):
+        dprev_h_t += dh[:, t, :]
+        dx_t, dprev_h_t, dWx_t, dWh_t, db_t = rnn_step_backward(dprev_h_t, cache[t])
+        dx_by_t.append(dx_t)
+        dWx = dWx_t + dWx if dWx is not None else dWx_t
+        dWh = dWh_t + dWh if dWh is not None else dWh_t
+        db = db_t + db if db is not None else db_t
+
+    dx = np.asarray(list(reversed(dx_by_t))).transpose(1, 0, 2)
+    dh0 = dprev_h_t
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -154,7 +199,8 @@ def word_embedding_forward(x, W):
     #                                                                            #
     # HINT: This can be done in one line using NumPy's array indexing.           #
     ##############################################################################
-    pass
+    out = W[x, :]
+    cache = (x, W.shape[0], W.shape[1])
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -183,7 +229,9 @@ def word_embedding_backward(dout, cache):
     # Note that words can appear more than once in a sequence.                   #
     # HINT: Look up the function np.add.at                                       #
     ##############################################################################
-    pass
+    (x, V, D) = cache
+    dW = np.zeros(shape=(V, D))
+    np.add.at(dW, x, dout)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################

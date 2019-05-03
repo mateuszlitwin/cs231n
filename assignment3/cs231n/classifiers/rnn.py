@@ -142,7 +142,14 @@ class CaptioningRNN(object):
 
         h0, proj_cache = affine_forward(features, W_proj, b_proj)
         embedded_in, embedded_in_cache = word_embedding_forward(captions_in, W_embed)
-        hidden_states, rnn_forward_cache = rnn_forward(embedded_in, h0, Wx, Wh, b)
+
+        forward = rnn_forward
+        backward = rnn_backward
+        if self.cell_type == 'lstm':
+            forward = lstm_forward
+            backward = lstm_backward
+
+        hidden_states, forward_cache = forward(embedded_in, h0, Wx, Wh, b)
         scores, generated_cache = temporal_affine_forward(
             hidden_states, W_vocab, b_vocab)
 
@@ -151,8 +158,8 @@ class CaptioningRNN(object):
         dhidden_states, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(
             dout, generated_cache)
 
-        dembedded_in, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(
-            dhidden_states, rnn_forward_cache)
+        dembedded_in, dh0, grads['Wx'], grads['Wh'], grads['b'] = backward(
+            dhidden_states, forward_cache)
         grads['W_embed'] = word_embedding_backward(dembedded_in, embedded_in_cache)
         _, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, proj_cache)
 
@@ -220,10 +227,14 @@ class CaptioningRNN(object):
         ###########################################################################
 
         h, _ = affine_forward(features, W_proj, b_proj)
+        c = np.zeros_like(h)
         captions_in = (self._start * np.ones(shape=(N,))).astype(np.int32)
         for t in range(max_length):
             embedded_in, _ = word_embedding_forward(captions_in, W_embed)
-            h, _ = rnn_step_forward(embedded_in, h, Wx, Wh, b)
+            if self.cell_type == 'rnn':
+                h, _ = rnn_step_forward(embedded_in, h, Wx, Wh, b)
+            else:
+                h, c, _ = lstm_step_forward(embedded_in, h, c, Wx, Wh, b)
             scores, _ = affine_forward(h, W_vocab, b_vocab)
             captions[:, t] = np.argmax(scores, axis=1)
             captions_in = captions[:, t]
